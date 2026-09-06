@@ -1,26 +1,30 @@
 extends Node2D
-## Wires up the world: walls, garage, car, tourist spawning, and the HUD.
+## Wires up the world: ground, walls, garage, car, tourist spawning, and HUD.
 
 const WORLD_SIZE := Vector2(960, 640)
 const WALL_THICKNESS := 20.0
+const SPAWN_MARGIN := 80.0
+## Bottom-left, clear of the HUD readout in the top-left corner.
+const GARAGE_POS := Vector2(70, 570)
+const GARAGE_CLEARANCE := 110.0
+const MAX_WAITING := 3
 const FARE_PER_100_PX := 8.0
 const BASE_FARE := 24.0
+const BADLY_DAMAGED_PERCENT := 80.0
+## The HUD readout sits over this corner; anything spawned under it is invisible.
+const HUD_CORNER := Rect2(0, 0, 400, 160)
 
 var car: Car
 var garage: Garage
-var destination: DestinationPoint
+var hud: Hud
+var pickups: Array[PickupPoint] = []
 var player_in_garage: bool = false
 
-var money_label: Label
-var damage_label: Label
-var status_label: Label
-var garage_panel: PanelContainer
-var garage_title: Label
-
 func _ready() -> void:
+	add_child(Ground.create(WORLD_SIZE))
 	_build_world_bounds()
 
-	garage = Garage.create(Vector2(60, 60))
+	garage = Garage.create(GARAGE_POS)
 	add_child(garage)
 	garage.player_entered.connect(_on_garage_entered)
 	garage.player_exited.connect(_on_garage_exited)
@@ -28,18 +32,25 @@ func _ready() -> void:
 	car = Car.create()
 	car.position = WORLD_SIZE / 2.0
 	add_child(car)
+	car.passengers_changed.connect(func(count: int) -> void: hud.set_passengers(count))
 
-	_spawn_pickup()
-	_build_hud()
+	hud = Hud.create(WORLD_SIZE / 2.0)
+	add_child(hud)
+	hud.buy_requested.connect(_on_buy_requested)
+	hud.repair_requested.connect(_on_repair_requested)
+	GameState.money_changed.connect(hud.set_money)
+	GameState.damage_changed.connect(_on_damage_changed)
+	GameState.car_changed.connect(func(_id: String) -> void: hud.set_passengers(car.passengers))
+	hud.set_money(GameState.money)
+	hud.set_damage()
+	hud.set_passengers(0)
+	hud.set_status("Drive into a waiting tourist to pick them up")
 
-	GameState.money_changed.connect(_update_money_label)
-	GameState.damage_changed.connect(_update_damage_label)
-	_update_money_label(GameState.money)
-	_update_damage_label(GameState.damage)
+	_ensure_pickups()
 
 func _process(_delta: float) -> void:
 	if player_in_garage and Input.is_action_just_pressed("ui_accept"):
-		garage_panel.visible = not garage_panel.visible
+		hud.toggle_garage()
 
 func _build_world_bounds() -> void:
 	var walls := [
@@ -58,85 +69,64 @@ func _build_world_bounds() -> void:
 		wall.add_child(shape)
 		add_child(wall)
 
-func _spawn_pickup() -> void:
-	var pos := Vector2(randf_range(80, WORLD_SIZE.x - 80), randf_range(80, WORLD_SIZE.y - 80))
-	var pickup := PickupPoint.create(pos)
-	add_child(pickup)
-	pickup.tourist_picked_up.connect(_on_tourist_picked_up)
+## A random spot inside the kerb that is neither on the garage nor under the HUD.
+func _random_spot() -> Vector2:
+	while true:
+		var pos := Vector2(
+			randf_range(SPAWN_MARGIN, WORLD_SIZE.x - SPAWN_MARGIN),
+			randf_range(SPAWN_MARGIN, WORLD_SIZE.y - SPAWN_MARGIN))
+		if pos.distance_to(GARAGE_POS) > GARAGE_CLEARANCE and not HUD_CORNER.has_point(pos):
+			return pos
+	return WORLD_SIZE / 2.0
+
+func _ensure_pickups() -> void:
+	while pickups.size() < MAX_WAITING:
+		var pickup := PickupPoint.create(_random_spot())
+		add_child(pickup)
+		pickup.tourist_picked_up.connect(_on_tourist_picked_up)
+		pickups.append(pickup)
 
 func _on_tourist_picked_up(point: PickupPoint) -> void:
+	pickups.erase(point)
+	# Freeing inside the physics callback that fired this signal crashes the
+	# physics server, so defer it.
 	point.call_deferred("queue_free")
-	var pos := Vector2(randf_range(80, WORLD_SIZE.x - 80), randf_range(80, WORLD_SIZE.y - 80))
-	destination = DestinationPoint.create(pos)
+	var dest_pos := _random_spot()
+	var fare := int(BASE_FARE + FARE_PER_100_PX * point.position.distance_to(dest_pos) / 100.0)
+	var destination := DestinationPoint.create(dest_pos, fare)
 	add_child(destination)
 	destination.tourist_dropped_off.connect(_on_tourist_dropped_off)
-	status_label.text = "Carrying a tourist -- head to the green marker"
+	hud.set_status("Tourist aboard -- deliver to a flag for $%d" % fare)
+	_ensure_pickups()
 
 func _on_tourist_dropped_off(point: DestinationPoint) -> void:
-	var fare := int(BASE_FARE + FARE_PER_100_PX * (point.position.distance_to(car.position) / 100.0))
-	GameState.add_money(fare)
+	GameState.add_money(point.fare)
 	point.call_deferred("queue_free")
-	car.carrying_tourist = false
-	status_label.text = "Delivered! +$%d" % fare
-	_spawn_pickup()
+	hud.set_status("Delivered! +$%d" % point.fare)
+
+func _on_damage_changed(_damage: float) -> void:
+	hud.set_damage()
+	if GameState.damage_percent() >= BADLY_DAMAGED_PERCENT:
+		hud.set_status("Car badly damaged -- it's crawling. Repair at the garage")
 
 func _on_garage_entered() -> void:
 	player_in_garage = true
-	status_label.text = "Press Enter at the garage to manage your car"
+	hud.set_status("Press Enter to open the garage")
 
 func _on_garage_exited() -> void:
 	player_in_garage = false
-	garage_panel.visible = false
+	hud.hide_garage()
 
-func _build_hud() -> void:
-	var hud := CanvasLayer.new()
-	add_child(hud)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	hud.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	margin.add_child(vbox)
-
-	money_label = Label.new()
-	vbox.add_child(money_label)
-
-	damage_label = Label.new()
-	vbox.add_child(damage_label)
-
-	status_label = Label.new()
-	status_label.text = "Drive to the yellow marker to pick up a tourist"
-	vbox.add_child(status_label)
-
-	garage_panel = PanelContainer.new()
-	garage_panel.visible = false
-	garage_panel.position = Vector2(WORLD_SIZE.x / 2.0 - 140, WORLD_SIZE.y / 2.0 - 100)
-	hud.add_child(garage_panel)
-
-	var panel_vbox := VBoxContainer.new()
-	garage_panel.add_child(panel_vbox)
-
-	garage_title = Label.new()
-	garage_title.text = "Garage -- current car: %s" % GameState.current_car.display_name
-	panel_vbox.add_child(garage_title)
-
-	for c in GameState.catalog:
-		var button := Button.new()
-		button.text = "%s -- $%d (durability %d)" % [c.display_name, c.price, int(c.max_health)]
-		button.pressed.connect(_on_buy_pressed.bind(c.id))
-		panel_vbox.add_child(button)
-
-func _on_buy_pressed(car_id: String) -> void:
-	if GameState.buy_car(car_id):
-		garage_title.text = "Garage -- current car: %s" % GameState.current_car.display_name
-		status_label.text = "Bought %s!" % GameState.current_car.display_name
+func _on_buy_requested(car_id: String) -> void:
+	if car.passengers > 0:
+		hud.set_status("Drop your passengers off before switching cars")
+	elif GameState.buy_car(car_id):
+		hud.set_status("Bought %s!" % GameState.current_car.display_name)
 	else:
-		status_label.text = "Can't afford that, or already own it"
+		hud.set_status("Can't afford that, or you already own it")
 
-func _update_money_label(amount: int) -> void:
-	money_label.text = "Money: $%d" % amount
-
-func _update_damage_label(_damage: float) -> void:
-	damage_label.text = "Damage: %d%%" % int(GameState.damage_percent())
+func _on_repair_requested() -> void:
+	if GameState.repair():
+		hud.set_status("Repaired -- good as new")
+	else:
+		hud.set_status("Can't afford the repair")
