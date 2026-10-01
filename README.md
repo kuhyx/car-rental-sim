@@ -8,6 +8,10 @@ Built with Godot 4 (GL Compatibility renderer). No image assets — every
 visual is drawn in code with the Lospec **AYY4** palette
 (<https://lospec.com/palette-list/ayy4>), so the whole repo is text.
 
+Play it in the browser: <https://kuhyx.itch.io/car-rental-sim>. Publish a new
+build with `tools/publish_itch.sh` (export → headless-Chromium smoke test →
+butler push, versioned by the commit hash; refuses a dirty tree).
+
 ## Run it
 
 ```

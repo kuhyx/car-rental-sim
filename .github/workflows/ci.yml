@@ -1,0 +1,38 @@
+name: ci
+
+# Parse check, then the same web export + headless-Chromium smoke test that
+# tools/publish_itch.sh runs before every itch.io upload.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          rm godot.zip
+
+      - name: Import and parse check
+        run: |
+          godot --headless --editor --path . --quit-after 1
+          godot --headless --path . --quit 2>&1 | tee parse.log
+          ! grep -E 'SCRIPT ERROR|Parse Error' parse.log
+
+      - name: Export web and smoke-test it in headless Chromium
+        run: |
+          uv run --with playwright python -m playwright install --with-deps chromium >/dev/null
+          tools/export_web.sh "$PWD/../web"
+          uv run --with playwright python tools/web_smoke.py "$PWD/../web" --shot "$PWD/../web_smoke.png"

@@ -17,6 +17,10 @@ hardware support.
 
 - Run: `godot --path .`
 - Headless syntax/parse check (no window): `godot --headless --path . --quit`
+- Publish to itch.io (https://kuhyx.itch.io/car-rental-sim, public, free):
+  `tools/publish_itch.sh` — export (preset "Web", single-threaded) →
+  `tools/web_smoke.py` headless-Chromium check → butler push. CI runs the
+  same export + smoke test.
 - **After adding a `class_name` script** the global class cache must be
   rebuilt or the headless run fails with "Could not find type X":
   `godot --headless --editor --path . --quit-after 1`. This also writes the
