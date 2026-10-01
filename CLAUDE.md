@@ -20,7 +20,10 @@ hardware support.
 - Publish to itch.io (https://kuhyx.itch.io/car-rental-sim, public, free):
   `tools/publish_itch.sh` — export (preset "Web", single-threaded) →
   `tools/web_smoke.py` headless-Chromium check → butler push. CI runs the
-  same export + smoke test.
+  same export + smoke test, and `.github/workflows/deploy-itch.yml` runs
+  `tools/publish_itch.sh` automatically once `ci` is green on `main` and
+  game files changed since the live build (docs/`.github`-only commits are
+  skipped). Force a redeploy: `gh workflow run deploy-itch.yml -f force=true`.
 - **After adding a `class_name` script** the global class cache must be
   rebuilt or the headless run fails with "Could not find type X":
   `godot --headless --editor --path . --quit-after 1`. This also writes the
