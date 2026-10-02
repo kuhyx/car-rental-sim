@@ -15,7 +15,7 @@ readonly REPO_ROOT
 readonly TARGET="kuhyx/car-rental-sim:html5"
 readonly BUTLER_URL="https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
 readonly BIN_DIR="$HOME/.local/bin"
-readonly OUT="$REPO_ROOT/../car-rental-sim_binaries/web"
+readonly OUT="$HOME/data/car-rental-sim_binaries/web"
 DRY_RUN=0
 
 ensure_butler() {

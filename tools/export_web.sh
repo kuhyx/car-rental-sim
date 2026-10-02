@@ -3,7 +3,7 @@
 # ============================================================================
 # Export the browser build (preset "Web": single-threaded, so itch.io needs
 # no SharedArrayBuffer / cross-origin isolation) into <out_dir>, default
-# ../car-rental-sim_binaries/web. Installs the Godot export templates if missing.
+# ~/data/car-rental-sim_binaries/web. Installs the Godot export templates if missing.
 #   scripts/export_web.sh [out_dir]
 # ============================================================================
 
@@ -30,7 +30,7 @@ ensure_templates() {
 
 main() {
     local out
-    out="$(realpath -m "${1:-$REPO_ROOT/../car-rental-sim_binaries/web}")"
+    out="$(realpath -m "${1:-$HOME/data/car-rental-sim_binaries/web}")"
     ensure_templates
     rm -rf "$out"
     mkdir -p "$out"

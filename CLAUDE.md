@@ -7,7 +7,7 @@ hardware support.
 - Git remote: `origin` → `github.com/kuhyx/car-rental-sim`.
 - No image/audio assets: every visual is `_draw()` primitives or a themed
   `Label`/`Button`, so the repo stays plain text. Keep it that way unless art
-  is explicitly added under a sibling `../car-rental-sim_binaries/` directory,
+  is explicitly added under `~/data/car-rental-sim_binaries/`,
   per the global binary-files rule.
 - **Palette is locked to Lospec AYY4** (`scripts/palette.gd`): INK `#00303b`,
   CORAL `#ff7777`, PEACH `#ffce96`, CREAM `#f1f2da`. Never introduce a fifth
