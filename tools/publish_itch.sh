@@ -39,7 +39,7 @@ main() {
         exit 1
     fi
     "$REPO_ROOT/tools/export_web.sh" "$OUT"
-    uv run --with playwright python "$REPO_ROOT/tools/web_smoke.py" "$OUT" \
+    uv run --no-project --with playwright python "$REPO_ROOT/tools/web_smoke.py" "$OUT" \
         --shot "$OUT/../web_smoke.png"
     local version
     version="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
